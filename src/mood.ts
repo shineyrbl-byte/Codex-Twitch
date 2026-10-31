@@ -44,6 +44,68 @@ const emotePattern =
   /\b(PogChamp|POG|Pog|KEKW|LUL|Kappa|OMEGALUL|Pepega|FeelsGoodMan|FeelsBadMan)\b|[\p{Extended_Pictographic}]/gu;
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
+const weatherCopy: Record<
+  Weather,
+  { icon: string; label: string; phrase: string; chance: string }
+> = {
+  sun: {
+    icon: "☀️",
+    label: "Sunshine",
+    phrase: "Hype levels are rising",
+    chance: "hype",
+  },
+  storm: {
+    icon: "⛈️",
+    label: "Thunderstorm",
+    phrase: "Chat is unhinged",
+    chance: "chaos",
+  },
+  breeze: {
+    icon: "🌤️",
+    label: "Calm breeze",
+    phrase: "A calm breeze is passing through",
+    chance: "breeze",
+  },
+  rain: {
+    icon: "🌧️",
+    label: "Drizzle",
+    phrase: "A little negativity in the air",
+    chance: "rain",
+  },
+  fog: {
+    icon: "☁️",
+    label: "Quiet skies",
+    phrase: "Chat has gone quiet",
+    chance: "fog",
+  },
+  snow: {
+    icon: "❄️",
+    label: "Emote flurry",
+    phrase: "Emotes are piling up",
+    chance: "snow",
+  },
+};
+
+export function withWeather(climate: Climate, weather: Weather): Climate {
+  const copy = weatherCopy[weather];
+  const chance =
+    weather === "sun"
+      ? climate.energy
+      : weather === "storm" || weather === "snow"
+        ? climate.chaos
+        : weather === "rain"
+          ? 100 - climate.positivity
+          : weather === "fog"
+            ? climate.quiet
+            : 100 - climate.quiet;
+  return {
+    ...climate,
+    weather,
+    label: copy.label,
+    forecast: `${copy.icon} ${copy.phrase}. ${Math.round(chance)}% chance of ${copy.chance}.`,
+  };
+}
+
 export function analyze(messages: ChatMessage[], now = Date.now()): Climate {
   const recent = messages.filter((m) => now - m.at < 30_000);
   const n = recent.length;

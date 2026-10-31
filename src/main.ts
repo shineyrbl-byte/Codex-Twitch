@@ -1,5 +1,5 @@
 import "./style.css";
-import { analyze } from "./mood";
+import { analyze, withWeather } from "./mood";
 import { WeatherCanvas } from "./weather";
 import { startDeviceFlow, TwitchConnection } from "./twitch";
 import {
@@ -411,17 +411,9 @@ function updateSpellProgress(): void {
 function tick(): void {
   state.climate = analyze(state.messages);
   if (state.demoWeather) {
-    state.climate = {
-      ...state.climate,
-      weather: state.demoWeather,
-      label: weatherLabel(state.demoWeather),
-    };
+    state.climate = withWeather(state.climate, state.demoWeather);
   } else if (state.spellWeather && state.spellWeather.until > Date.now()) {
-    state.climate = {
-      ...state.climate,
-      weather: state.spellWeather.weather,
-      label: weatherLabel(state.spellWeather.weather),
-    };
+    state.climate = withWeather(state.climate, state.spellWeather.weather);
   } else {
     state.spellWeather = undefined;
   }

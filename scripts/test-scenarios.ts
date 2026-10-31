@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { analyze } from "../src/mood";
+import { analyze, withWeather } from "../src/mood";
 import { createScenario } from "../src/simulator";
 
 const now = Date.now();
@@ -39,3 +39,10 @@ for (const scenario of scenarios) {
   }
   console.log(`✓ ${scenario.name} → ${result.weather}`);
 }
+
+const demoClimate = withWeather(analyze([], now), "sun");
+assert.equal(demoClimate.weather, "sun");
+assert.equal(demoClimate.label, "Sunshine");
+assert.match(demoClimate.forecast, /^☀️ Hype levels are rising\./);
+assert.match(demoClimate.forecast, /chance of hype\.$/);
+console.log("✓ demo weather title and forecast stay in sync");
