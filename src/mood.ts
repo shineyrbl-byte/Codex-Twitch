@@ -26,8 +26,8 @@ export function analyze(messages:ChatMessage[], now=Date.now()):Climate {
   let weather:Weather='breeze',label='Calm breeze';
   if(n<3||quiet>92){weather='fog';label='Quiet skies';}
   else if(positivity<38){weather='rain';label='Drizzle';}
-  else if(energy>55&&chaos>48){weather='storm';label='Thunderstorm';}
-  else if(energy>48&&positivity>58){weather='sun';label='Sunshine';}
+  else if(energy>34&&chaos>48){weather='storm';label='Thunderstorm';}
+  else if(energy>34&&positivity>58){weather='sun';label='Sunshine';}
   else if(energy<22&&positivity>=48){weather='breeze';label='Calm breeze';}
   else if(chaos>60){weather='snow';label='Emote flurry';}
   const emotes=new Map<string,number>(); for(const m of recent){emotePattern.lastIndex=0;for(const e of m.text.match(emotePattern)||[])emotes.set(e,(emotes.get(e)||0)+1);}
