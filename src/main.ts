@@ -411,7 +411,7 @@ function updateSpellProgress(): void {
 function tick(): void {
   state.climate = analyze(state.messages);
   if (state.demoWeather) {
-    state.climate = withWeather(state.climate, state.demoWeather);
+    state.climate = withWeather(state.climate, state.demoWeather, true);
   } else if (state.spellWeather && state.spellWeather.until > Date.now()) {
     state.climate = withWeather(state.climate, state.spellWeather.weather);
   } else {

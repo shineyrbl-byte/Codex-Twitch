@@ -86,7 +86,11 @@ const weatherCopy: Record<
   },
 };
 
-export function withWeather(climate: Climate, weather: Weather): Climate {
+export function withWeather(
+  climate: Climate,
+  weather: Weather,
+  forced = false,
+): Climate {
   const copy = weatherCopy[weather];
   const chance =
     weather === "sun"
@@ -98,11 +102,15 @@ export function withWeather(climate: Climate, weather: Weather): Climate {
           : weather === "fog"
             ? climate.quiet
             : 100 - climate.quiet;
+  const displayedChance = forced
+    ? 80 + Math.round(chance * 0.15)
+    : Math.round(chance);
+  const forecast = `${copy.icon} ${copy.phrase}${displayedChance < 20 ? "." : ` · ${displayedChance}% chance of ${copy.chance}.`}`;
   return {
     ...climate,
     weather,
     label: copy.label,
-    forecast: `${copy.icon} ${copy.phrase}. ${Math.round(chance)}% chance of ${copy.chance}.`,
+    forecast,
   };
 }
 
@@ -229,7 +237,7 @@ export function analyze(messages: ChatMessage[], now = Date.now()): Climate {
     quiet,
     weather,
     label,
-    forecast: `${weather === "storm" ? "⛈️" : weather === "sun" ? "☀️" : weather === "rain" ? "🌧️" : weather === "fog" ? "☁️" : weather === "snow" ? "❄️" : "🌤️"} ${phrase}. ${Math.round(pct)}% chance of ${weather === "storm" ? "chaos" : weather === "sun" ? "hype" : weather === "fog" ? "fog" : weather}.`,
+    forecast: `${weather === "storm" ? "⛈️" : weather === "sun" ? "☀️" : weather === "rain" ? "🌧️" : weather === "fog" ? "☁️" : weather === "snow" ? "❄️" : "🌤️"} ${phrase}${pct < 20 ? "." : ` · ${Math.round(pct)}% chance of ${weather === "storm" ? "chaos" : weather === "sun" ? "hype" : weather === "fog" ? "fog" : weather}.`}`,
     topEmote,
   };
 }

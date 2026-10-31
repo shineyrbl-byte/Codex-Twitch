@@ -40,9 +40,17 @@ for (const scenario of scenarios) {
   console.log(`✓ ${scenario.name} → ${result.weather}`);
 }
 
-const demoClimate = withWeather(analyze([], now), "sun");
+const demoClimate = withWeather(analyze([], now), "sun", true);
 assert.equal(demoClimate.weather, "sun");
 assert.equal(demoClimate.label, "Sunshine");
-assert.match(demoClimate.forecast, /^☀️ Hype levels are rising\./);
-assert.match(demoClimate.forecast, /chance of hype\.$/);
+assert.match(demoClimate.forecast, /^☀️ Hype levels are rising(?: ·|\.)/);
+assert.match(
+  demoClimate.forecast,
+  /(?:80|81|82|83|84|85|86|87|88|89|90|91|92|93|94|95)% chance of hype\.$/,
+);
+const lowChance = withWeather(
+  { ...demoClimate, energy: 1, positivity: 99, chaos: 1, quiet: 1 },
+  "sun",
+);
+assert.doesNotMatch(lowChance.forecast, /% chance/);
 console.log("✓ demo weather title and forecast stay in sync");
