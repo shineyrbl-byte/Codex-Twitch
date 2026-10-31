@@ -191,8 +191,9 @@ export class WeatherCanvas {
       c.globalAlpha = Math.max(0, 1 - progress);
       if (e.kind === "sub") {
         const x = w * 0.5,
-          y = h * 0.76,
-          r = Math.min(w * 0.23, h * 0.47) * (0.75 + progress * 0.25);
+          y = h * 0.31,
+          rx = w * 0.42 * (0.85 + progress * 0.15),
+          ry = h * 0.27 * (0.85 + progress * 0.15);
         const rainbow = [
           "#fa7774",
           "#ffc66c",
@@ -206,7 +207,15 @@ export class WeatherCanvas {
           c.strokeStyle = color;
           c.lineWidth = Math.max(4, w * 0.005);
           c.globalAlpha *= 0.6;
-          c.arc(x, y, r - i * Math.max(4, w * 0.006), Math.PI, Math.PI * 2);
+          c.ellipse(
+            x,
+            y,
+            rx - i * Math.max(4, w * 0.006),
+            ry - i * Math.max(4, h * 0.006),
+            0,
+            Math.PI,
+            Math.PI * 2,
+          );
           c.stroke();
           c.globalAlpha = Math.max(0, 1 - progress);
         });
@@ -236,7 +245,7 @@ export class WeatherCanvas {
       }
       if (e.kind === "tornado") {
         const x = w * (0.18 + progress * 0.64),
-          cy = h * 0.57;
+          cy = h * 0.78;
         for (let i = 0; i < 9; i++) {
           const q = i / 9,
             rx = (0.018 + q * 0.07) * w,
@@ -268,7 +277,10 @@ export class WeatherCanvas {
         c.fill();
       }
       const x = w * 0.5 + Math.sin(age * 1.3) * w * 0.24,
-        y = h * 0.32 - age * h * 0.035;
+        y =
+          e.kind === "raid"
+            ? h * 0.08 - age * h * 0.01
+            : h * 0.32 - age * h * 0.035;
       c.globalAlpha = Math.max(0, 1 - progress);
       c.textAlign = "center";
       c.font = `600 ${Math.max(17, w * 0.018)}px Inter,system-ui,sans-serif`;
