@@ -1,64 +1,404 @@
-import './style.css';
-import { analyze } from './mood';
-import { WeatherCanvas } from './weather';
-import { startDeviceFlow, TwitchConnection } from './twitch';
-import type { ChatMessage, Climate, Weather, WeatherEvent } from './types';
+import "./style.css";
+import { analyze } from "./mood";
+import { WeatherCanvas } from "./weather";
+import { startDeviceFlow, TwitchConnection } from "./twitch";
+import {
+  bindDashboard,
+  drawChat,
+  drawMetrics,
+  renderDashboard,
+  setDashboardText,
+} from "./dashboard";
+import { renderOverlay, updateOverlay } from "./overlay";
+import { SpellController, type SpellProgress } from "./spells";
+import { createScenario, startOverlaySimulator } from "./simulator";
+import { createState, makeOverlayUrl, readOverlayOptions } from "./state";
+import type { ChatMessage, Weather, WeatherEvent } from "./types";
 
-const app=document.querySelector<HTMLDivElement>('#app')!;
-const overlayMode=location.pathname==='/overlay';
-const overlayParams=new URLSearchParams(location.hash.slice(1));
-const icons:Record<Weather,string>={sun:'☀️',storm:'⛈️',breeze:'🌤️',rain:'🌧️',fog:'🌫️',snow:'❄️'};
-let messages:ChatMessage[]=[],climate=analyze([]),events:WeatherEvent[]=[],calm=false,sensitivity=50,simulator=true,mode='idle',votes=new Map<string,{kind:string;at:number}>(),spellCooldown=new Map<string,number>(),lightningAt=0,spellWeather:{weather:Weather;until:number}|undefined,deviceAbort:AbortController|undefined,accessToken=sessionStorage.getItem('stormchat_token')||'',overlayEventCursor=0,lastRecordedWeather:Weather='fog',weatherCounts:Record<string,number>={sun:0,storm:0,rain:0,fog:0};
-let weatherCanvas:WeatherCanvas;
-let spellThresholdPercent=30;
-const fmt=(n:number)=>String(n).padStart(2,'0');
-let twitch=new TwitchConnection((kind,data)=>handleTwitch(kind,data),(s)=>status(s),()=>showReconnectNote());
+const root = document.querySelector<HTMLDivElement>("#app")!;
+const overlayMode = location.pathname === "/overlay";
+const state = createState(
+  overlayMode
+    ? 30
+    : Number(localStorage.getItem("stormchat_spell_threshold")) || 30,
+);
+const icons: Record<Weather, string> = {
+  sun: "☀️",
+  storm: "⛈️",
+  breeze: "🌤️",
+  rain: "🌧️",
+  fog: "🌫️",
+  snow: "❄️",
+};
 
-if(overlayMode){app.innerHTML=`<main class="overlay"><canvas id="weather"></canvas><div class="overlay-hud"><div class="hud-icon" id="hud-icon">${icons[climate.weather]}</div><div><div class="hud-label" id="hud-label">${climate.label}</div><div class="hud-forecast" id="hud-forecast">${climate.forecast}</div><div class="hud-vote" id="hud-vote-progress"></div></div><div class="hud-emote"><small>CHAT'S MOOD</small><strong id="hud-emote">${climate.topEmote}</strong></div></div><div id="event-toast" class="event-toast"></div></main>`;weatherCanvas=new WeatherCanvas(document.querySelector('#weather')!);update();setInterval(tick,2000);startStandaloneOverlay();}
-else renderDashboard();
+let accessToken = sessionStorage.getItem("stormchat_token") || "";
+let weatherCanvas: WeatherCanvas;
+let deviceAbort: AbortController | undefined;
+let spellProgress: SpellProgress = { count: 0, required: 2, text: "", fill: 0 };
 
-function renderDashboard(){app.innerHTML=`<div class="app-shell"><header class="topbar"><a class="brand" href="/"><span class="brand-mark">S</span><span>stormchat<span class="brand-period">.</span></span></a><div class="top-status"><span class="status-dot" id="status-dot"></span><span id="connection-status">Simulator ready</span></div><div class="top-actions"><a class="ghost-button" href="/overlay" target="_blank">↗&nbsp; Open OBS overlay</a><button class="icon-button" id="copy-obs-url-top" title="Copy OBS overlay URL">⌁</button></div></header>
-<main class="dashboard"><section class="intro"><div class="eyebrow"><span class="live-pulse"></span> LIVE CHAT CLIMATE</div><h1>Chat is the <span>weather.</span></h1><p>Your community sets the forecast. Bring the mood of chat right into your stream.</p></section>
-<section class="hero-grid"><article class="weather-card" id="weather-card"><div class="card-topline"><span class="micro-label">CURRENT CONDITIONS</span><span class="live-badge"><i></i> LIVE</span></div><div class="weather-hero"><canvas id="weather" class="preview-canvas"></canvas><div class="weather-symbol" id="main-icon">${icons[climate.weather]}</div><div class="weather-info"><div class="weather-name" id="main-label">${climate.label}</div><div class="forecast" id="forecast">${climate.forecast}</div></div><div class="condition-time">YOUR SCENE<br/><strong>LIVE NOW</strong></div></div><div class="weather-footer"><div class="contributor"><div class="contributor-mark">${climate.topEmote}</div><div><small>TOP CONTRIBUTOR</small><strong id="top-emote">${climate.topEmote}</strong></div></div><div class="weather-actions"><button class="soft-button" id="test-lightning">⚡&nbsp; Test lightning</button><button class="soft-button" id="calm-toggle">Ⅱ&nbsp; Calm skies</button></div></div></article>
-<aside class="side-panel"><div class="side-head"><div><span class="micro-label">YOUR CHANNEL</span><h2 id="channel-name">Simulator stream</h2></div><span class="channel-avatar">S</span></div><div class="connection-note" id="connect-note">Simulator is active. Connect Twitch to read your live chat, or run a demo below.</div><div class="reconnect-note" id="reconnect-note" hidden>⚠ Twitch connection expired. Reconnect to refresh the OBS overlay link.</div><div class="connect-actions"><button class="twitch-button" id="connect-twitch"><span>◉</span> Connect with Twitch</button><button class="text-button" id="disconnect" hidden>Disconnect</button></div><button class="copy-obs-button" id="copy-obs-url">Copy OBS overlay URL</button><div class="private-warning">This link contains your Twitch access token. Keep it private and remove it from OBS when disconnecting.</div><div class="divider"></div><div class="stream-row"><span class="stream-led"></span><span>StormChat simulator</span><span class="streaming-pill">ON</span></div><div class="tiny-copy">Demo messages stay in this browser and disappear when you refresh.</div></aside></section>
-<section class="section-heading"><div><span class="micro-label">THE LAST 30 SECONDS</span><h2>Climate at a glance</h2></div><div class="window-label"><span></span> Updating every 2 seconds</div></section>
-<section class="metrics" id="metrics"></section>
-<section class="lower-grid"><article class="simulator-panel"><div class="panel-title"><div><span class="micro-label">TRY IT OUT</span><h2>Set the scene</h2></div><span class="demo-tag">DEMO MODE</span></div><p>Pick a chat moment and watch the climate shift in real time.</p><div class="scenario-grid"><button class="scenario" data-sim="hype"><span class="scenario-icon sun-bg">☀️</span><span><strong>Hype train</strong><small>Sunshine incoming</small></span><b>→</b></button><button class="scenario" data-sim="chaos"><span class="scenario-icon storm-bg">⛈️</span><span><strong>Emote storm</strong><small>Things get chaotic</small></span><b>→</b></button><button class="scenario" data-sim="quiet"><span class="scenario-icon fog-bg">🌫️</span><span><strong>Chat goes quiet</strong><small>Fog rolls in</small></span><b>→</b></button><button class="scenario" data-sim="negative"><span class="scenario-icon rain-bg">🌧️</span><span><strong>Rainy day</strong><small>A little negativity</small></span><b>→</b></button></div><div class="event-tests"><span>TRIGGER AN EVENT</span><button data-event="follow">💧 Follow</button><button data-event="sub">🌈 Sub</button><button data-event="cheer">✦ Cheer</button><button data-event="raid">⚠ Raid</button><button data-event="tornado">🌪 Tornado</button></div><div class="sim-bottom"><div class="slider-copy"><span>Effect intensity</span><strong id="intensity-value">${sensitivity}%</strong></div><input type="range" min="10" max="100" value="${sensitivity}" id="intensity"/><div class="slider-caps"><span>SUBTLE</span><span>DRAMATIC</span></div></div></article>
-<article class="activity-panel"><div class="panel-title"><div><span class="micro-label">THE CHATTER</span><h2>Weather makers</h2></div><button class="clear-button" id="clear-chat">Clear</button></div><div class="chat-list" id="chat-list"></div><div class="spells-box"><div><span class="micro-label">CHAT SPELLS</span><p>Votes scale with the number of active chatters (last minute).</p></div><div class="spell-row"><button data-spell="!rain">🌧 !rain</button><button data-spell="!sun">☀️ !sun</button><button data-spell="!snow">❄️ !snow</button><button data-spell="!fog">🌫 !fog</button></div><div class="vote-track"><div id="vote-fill"></div></div><div class="vote-label" id="vote-label">No active spell vote</div><label class="threshold-setting">Active chatters needed <strong id="spell-threshold-value">30%</strong><input type="range" id="spell-threshold" min="10" max="70" step="5" value="30"></label></div></article></section>
-<section class="bottom-row"><div class="how-card"><span class="how-icon">✳</span><div><strong>Simple, explainable, yours.</strong><p>No AI guesses. Just chat activity, known emotes, and word lists make the forecast.</p></div><a href="#how-it-works">How it works&nbsp; ↗</a></div><div class="climate-card"><span class="micro-label">TODAY'S CLIMATE</span><div class="climate-minis"><span>☀️ <b id="sun-count">0</b></span><span>⛈️ <b id="storm-count">0</b></span><span>🌧️ <b id="rain-count">0</b></span><span>🌫️ <b id="fog-count">0</b></span></div></div></section>
-<footer><span>STORMCHAT <b>⛈</b> &nbsp;—&nbsp; THE WEATHER IS THE CHAT</span><a href="https://github.com/shineyrbl-byte/Codex-Twitch" target="_blank">GITHUB ↗</a></footer></main></div>`;
- weatherCanvas=new WeatherCanvas(document.querySelector('#weather')!);bindDashboard();drawMetrics();drawChat();update();setInterval(tick,2000);if(accessToken)connectToken(accessToken).catch(()=>{sessionStorage.removeItem('stormchat_token');accessToken='';});
+const twitch = new TwitchConnection(
+  handleTwitch,
+  updateConnectionStatus,
+  showReconnectNote,
+);
+const spells = new SpellController(
+  () => state.messages,
+  () => state.spellThresholdPercent,
+  (progress) => {
+    spellProgress = progress;
+    updateSpellProgress();
+  },
+  castWeather,
+  (user) => showEvent({ kind: "lightning", name: user, at: Date.now() }),
+);
+
+if (overlayMode) {
+  mountOverlay();
+} else {
+  mountDashboard();
 }
 
-function bindDashboard(){
- document.querySelectorAll<HTMLButtonElement>('[data-sim]').forEach(b=>b.onclick=()=>simulate(b.dataset.sim!));document.querySelectorAll<HTMLButtonElement>('[data-event]').forEach(b=>b.onclick=()=>{const kind=b.dataset.event as WeatherEvent['kind'];showEvent({kind,name:kind==='raid'?'PixelParty':'Mika',amount:kind==='cheer'?250:kind==='raid'?24:undefined,at:Date.now()});});document.querySelectorAll<HTMLButtonElement>('[data-spell]').forEach(b=>b.onclick=()=>castSpell(b.dataset.spell!,`viewer${Math.ceil(Math.random()*7)}`));
- document.querySelector<HTMLInputElement>('#intensity')!.oninput=e=>{sensitivity=Number((e.target as HTMLInputElement).value);document.querySelector('#intensity-value')!.textContent=`${sensitivity}%`;update();};
- const thresholdControl=document.querySelector<HTMLInputElement>('#spell-threshold');if(thresholdControl){thresholdControl.value=String(spellThresholdPercent);thresholdControl.oninput=()=>{spellThresholdPercent=Number(thresholdControl.value);localStorage.setItem('stormchat_spell_threshold',String(spellThresholdPercent));setText('spell-threshold-value',`${spellThresholdPercent}%`);updateVoteProgress();};setText('spell-threshold-value',`${spellThresholdPercent}%`);}
- document.querySelector<HTMLButtonElement>('#calm-toggle')!.onclick=()=>{calm=!calm;weatherCanvas.setCalm(calm);document.querySelector('#calm-toggle')!.textContent=calm?'▶ Resume skies':'Ⅱ  Calm skies';document.querySelector('#weather-card')!.classList.toggle('is-calm',calm);};
- document.querySelector<HTMLButtonElement>('#test-lightning')!.onclick=()=>{const ev={kind:'lightning',name:'You',at:Date.now()} as WeatherEvent;showEvent(ev);};
- document.querySelector<HTMLButtonElement>('#clear-chat')!.onclick=()=>{messages=[];events=[];votes.clear();drawChat();tick();};
- document.querySelector<HTMLButtonElement>('#copy-obs-url')!.onclick=copyObsUrl;document.querySelector<HTMLButtonElement>('#copy-obs-url-top')!.onclick=copyObsUrl;
- document.querySelector<HTMLButtonElement>('#connect-twitch')!.onclick=()=>startTwitch();document.querySelector<HTMLButtonElement>('#disconnect')!.onclick=()=>{deviceAbort?.abort();twitch.disconnect();sessionStorage.removeItem('stormchat_token');accessToken='';status('Disconnected');document.querySelector('#channel-name')!.textContent='Simulator stream';document.querySelector('#connect-note')!.textContent='Simulator is active. Connect Twitch to read your live chat, or run a demo below.';};
-}
-function status(s:string){const el=document.querySelector('#connection-status');if(!el)return;el.textContent=s;document.querySelector('#status-dot')?.classList.toggle('connected',s.includes('Connected'));}
-function twitchClientId(){return import.meta.env.VITE_TWITCH_CLIENT_ID||localStorage.getItem('stormchat_client_id')||'';}
-async function startTwitch(){let id=twitchClientId();if(!id){id=prompt('Paste your Twitch Developer Client ID. You can save it in .env as VITE_TWITCH_CLIENT_ID.','')||'';if(!id)return;localStorage.setItem('stormchat_client_id',id);}deviceAbort=new AbortController();const button=document.querySelector<HTMLButtonElement>('#connect-twitch')!;button.disabled=true;button.textContent='Waiting for Twitch…';try{await startDeviceFlow(id,(code,url)=>{const win=window.open(url,'_blank','noopener,noreferrer');document.querySelector('#connect-note')!.innerHTML=`Enter this code on Twitch: <strong class="auth-code">${code}</strong> · <a target="_blank" rel="noreferrer" href="${url}">Open activation page</a>${win?'':' (allow pop-ups to open Twitch)'}`;status('Waiting for Twitch authorization…');},(token)=>{accessToken=token;sessionStorage.setItem('stormchat_token',token);},deviceAbort.signal);if(accessToken)await connectToken(accessToken);}catch(e){alert(e instanceof Error?e.message:String(e));status('Simulator ready');}finally{button.disabled=false;button.innerHTML='<span>◉</span> Connect with Twitch';}}
-async function connectToken(token:string){const id=twitchClientId();if(!id)throw new Error('Add a Twitch client ID to connect.');await twitch.connect(id,token);simulator=false;document.querySelector('#channel-name')!.textContent='Twitch channel';document.querySelector('#connect-note')!.textContent='Listening to live chat through Twitch EventSub.';document.querySelector('#reconnect-note')?.setAttribute('hidden','');document.querySelector<HTMLButtonElement>('#connect-twitch')!.hidden=true;document.querySelector<HTMLButtonElement>('#disconnect')!.hidden=false;}
-function handleTwitch(kind:string,data:any){if(kind==='chat'){const m:ChatMessage={user:data.user,text:data.text,at:Date.now(),emotes:[]};if(data.text.startsWith('!'))castSpell(data.text.split(/\s/)[0].toLowerCase(),data.user);messages.push(m);drawChat();}else{const mapping:any={follow:'follow',sub:'sub',cheer:'cheer',raid:'raid',tornado:'tornado'};if(mapping[kind]){showEvent({kind:mapping[kind],name:data.user,amount:data.amount,at:Date.now()});if(kind==='raid')for(let i=0;i<Math.min(25,data.amount||0);i++)messages.push({user:data.user,text:'POG!!!',at:Date.now(),emotes:['POG']});}}}
+function mountOverlay(): void {
+  const options = readOverlayOptions(location.hash);
+  state.sensitivity = options.sensitivity;
+  state.spellThresholdPercent = options.spellThresholdPercent;
+  state.simulator = options.simulator;
+  weatherCanvas = new WeatherCanvas(renderOverlay(root, state.climate));
+  updateClimate();
+  window.setInterval(tick, 2_000);
 
-function simulate(which:string){simulator=true;const now=Date.now();if(which==='quiet'){messages=[];}else{const scripts:Record<string,[string,string][]>={hype:[['Mika','LET’S GO!!! PogChamp 🔥'],['koi','this is amazing!!'],['tyler','W stream ❤️'],['moon','PogChamp PogChamp'],['ash','GO GO GO!!!'],['luma','KEKW'],['mika','WE WIN THESE'],['koi','🔥🔥🔥'],['iris','love this so much'],['jay','POG'] ],chaos:[['mika','POG POG POG POG'],['koi','KEKW KEKW KEKW'],['jay','AAAAAA!!!'],['ash','OMEGALUL'],['luma','PogChamp PogChamp PogChamp'],['tyler','💀💀💀💀💀'],['iris','KEKW KEKW'],['mika','AAAAAAAAA'],['jay','POG POG POG'],['ash','Pepega'] ],negative:[['koi','this is boring'],['ash','that was bad'],['jay','not great'],['tyler','worst play today'],['iris','so sad 😡']]};for(const [user,text]of scripts[which]||[])messages.push({user,text,at:now-Math.random()*12_000,emotes:[]});}drawChat();tick();}
-function castSpell(spell:string,user:string){const kind=spell.replace('!','');if(!['rain','sun','snow','fog'].includes(kind)){if(kind==='lightning'&&Date.now()-lightningAt>60_000){lightningAt=Date.now();showEvent({kind:'lightning',name:user,at:Date.now()});}return;}const now=Date.now(),chatter=user.toLowerCase(),last=spellCooldown.get(`${chatter}:${kind}`)||0;if(now-last<20_000)return;spellCooldown.set(`${chatter}:${kind}`,now);votes.set(chatter,{kind,at:now});updateVoteProgress();}
-function activeChatters(){const cutoff=Date.now()-60_000;const active=new Set(messages.filter(message=>message.at>=cutoff).map(message=>message.user.toLowerCase()));votes.forEach((vote,user)=>{if(Date.now()-vote.at<=20_000)active.add(user);});return active.size;}
-function requiredSpellVotes(){return Math.max(2,Math.min(5,Math.ceil(activeChatters()*spellThresholdPercent/100)));}
-function updateVoteProgress(){const now=Date.now();for(const [user,vote] of votes)if(now-vote.at>20_000)votes.delete(user);const tallies=new Map<string,number>();votes.forEach(vote=>tallies.set(vote.kind,(tallies.get(vote.kind)||0)+1));const [kind,tally]=[...tallies].sort((a,b)=>b[1]-a[1])[0]||[];const needed=requiredSpellVotes();const label=kind?`${icons[kind as Weather]} ${kind[0].toUpperCase()+kind.slice(1)}: ${tally}/${needed}`:'No active spell vote';setText('vote-label',label);setText('hud-vote-progress',kind?label:'');const fill=document.querySelector<HTMLElement>('#vote-fill');if(fill)fill.style.width=kind?`${Math.min(100,Math.round(tally/needed*100))}%`:'0%';document.querySelector('#hud-vote-progress')?.classList.toggle('visible',Boolean(kind));if(kind&&tally>=needed){const weather=kind as Weather;spellWeather={weather,until:now+20_000};votes.clear();setText('vote-label',`${icons[weather]} ${kind[0].toUpperCase()+kind.slice(1)} cast!`);setText('hud-vote-progress','');document.querySelector('#hud-vote-progress')?.classList.remove('visible');if(fill)fill.style.width='0%';}}
-function showEvent(ev:WeatherEvent){events.push(ev);weatherCanvas.addEvent(ev);const toast=document.querySelector<HTMLElement>('#event-toast');if(toast){toast.textContent=ev.kind==='raid'?`⚠ STORM FRONT INCOMING · ${ev.name}`:ev.kind==='sub'?`🌈 ${ev.name} subscribed`:ev.kind==='follow'?`💧 plip · ${ev.name} followed`:ev.kind==='cheer'?`✦ ${ev.name} cheered ${ev.amount||0} bits`:ev.kind==='tornado'?`🌪 ${ev.name} summoned a tornado`:`⚡ ${ev.name} called lightning`;toast.classList.add('visible');setTimeout(()=>toast.classList.remove('visible'),3800);}if(ev.kind==='follow')addMessage(ev.name,'💧 plip!');if(ev.kind==='sub')addMessage(ev.name,'🌈 subbed!');if(ev.kind==='cheer')addMessage(ev.name,`✦ ${ev.amount} bits!`);if(ev.kind==='raid')addMessage(ev.name,`⚠ ${ev.amount||'A'} raiders incoming!`);}
-function addMessage(user:string,text:string){messages.push({user,text,at:Date.now(),emotes:[]});drawChat();}
-function drawChat(){const box=document.querySelector('#chat-list');if(!box)return;const recent=messages.slice(-5).reverse();box.innerHTML=recent.length?recent.map((m,i)=>`<div class="chat-line"><span class="chat-avatar avatar-${i%4}">${m.user.slice(0,1).toUpperCase()}</span><span class="chat-user">${esc(m.user)}</span><span class="chat-text">${esc(m.text)}</span><time>${fmt(Math.floor((Date.now()-m.at)/60000))}:${fmt(Math.floor((Date.now()-m.at)/1000)%60)}</time></div>`).join(''):'<div class="empty-chat"><span>☁️</span><p>Chat is calm.<br/>Pick a scene to stir things up.</p></div>';}
-function drawMetrics(){const el=document.querySelector('#metrics');if(!el)return;const rows=[['Energy','The room is warming up','sun',climate.energy,'↗'],['Positivity','Good vibes in the air','heart',climate.positivity,'✳'],['Chaos','A little wild out there','chaos',climate.chaos,'⌁'],['Quiet','Stillness level','quiet',climate.quiet,'◌']];el.innerHTML=rows.map(([name,desc,key,val,icon])=>`<article class="metric-card"><div class="metric-head"><span class="metric-icon ${key}">${icon}</span><span class="micro-label">${name}</span><span class="metric-value">${val}%</span></div><div class="metric-bar"><i class="${key}" style="width:${val}%"></i></div><small>${desc}</small></article>`).join('');}
-function tick(){climate=analyze(messages);if(spellWeather&&spellWeather.until>Date.now()){climate={...climate,weather:spellWeather.weather,label:spellWeather.weather==='sun'?'Sunshine':spellWeather.weather==='rain'?'Drizzle':spellWeather.weather==='snow'?'Emote flurry':'Quiet skies'};}else spellWeather=undefined;if(climate.weather!==lastRecordedWeather){if(climate.weather in weatherCounts)weatherCounts[climate.weather]=(weatherCounts[climate.weather]||0)+1;lastRecordedWeather=climate.weather;for(const key of Object.keys(weatherCounts))setText(`${key}-count`,String(weatherCounts[key]));}update();updateVoteProgress();drawMetrics();if(document.querySelector('#chat-list'))drawChat();}
-function update(){if(!weatherCanvas)return;weatherCanvas.setWeather(climate.weather,sensitivity);weatherCanvas.setCalm(calm);setText('main-icon',icons[climate.weather]);setText('main-label',climate.label);setText('forecast',climate.forecast);setText('top-emote',climate.topEmote);setText('hud-icon',icons[climate.weather]);setText('hud-label',climate.label);setText('hud-forecast',climate.forecast);setText('hud-emote',climate.topEmote);document.body.dataset.weather=climate.weather;}
-function setText(id:string,value:string){const e=document.getElementById(id);if(e)e.textContent=value;}
-function showReconnectNote(){if(overlayMode)return;document.querySelector('#reconnect-note')?.removeAttribute('hidden');status('Reconnect needed');}
-async function copyObsUrl(){const url=new URL('/overlay',location.origin);const fragment=new URLSearchParams();if(accessToken){fragment.set('token',accessToken);fragment.set('client_id',twitchClientId());}else fragment.set('sim','1');fragment.set('sensitivity',String(sensitivity));fragment.set('spell_threshold',String(spellThresholdPercent));url.hash=fragment.toString();await navigator.clipboard?.writeText(url.toString());const buttons=document.querySelectorAll<HTMLButtonElement>('#copy-obs-url,#copy-obs-url-top');buttons.forEach(button=>{const original=button.textContent||'';button.textContent='Copied';setTimeout(()=>button.textContent=original,1400);});}
-function startStandaloneOverlay(){const intensity=Number(overlayParams.get('sensitivity'));if(Number.isFinite(intensity)&&intensity>0)sensitivity=Math.max(10,Math.min(100,intensity));spellThresholdPercent=Number(overlayParams.get('spell_threshold'))||30;if(overlayParams.get('sim')==='1'){simulator=true;const scenes=['quiet','hype','chaos','negative'];let index=0;const scene=()=>{messages=[];simulate(scenes[index%scenes.length]);if(index%2===1)showEvent({kind:index%4===1?'sub':'raid',name:index%4===1?'Mika':'PixelParty',amount:24,at:Date.now()});index++;};scene();setInterval(scene,10_000);return;}const token=overlayParams.get('token'),clientId=overlayParams.get('client_id');if(token&&clientId){simulator=false;twitch.connect(clientId,token).catch(()=>{});}}
-function esc(s:string){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));}
+  if (options.simulator) {
+    startOverlaySimulator((messages) => {
+      state.messages.splice(0, state.messages.length, ...messages);
+      tick();
+    }, showEvent);
+  } else if (options.token && options.clientId) {
+    twitch.connect(options.clientId, options.token).catch(() => {
+      // Keep authentication details out of the stream overlay and its console.
+    });
+  }
+}
+
+function mountDashboard(): void {
+  renderDashboard(
+    root,
+    state.climate,
+    state.sensitivity,
+    state.spellThresholdPercent,
+  );
+  weatherCanvas = new WeatherCanvas(document.querySelector("#weather")!);
+  bindDashboard({
+    onSimulator: runScenario,
+    onEvent: (kind) =>
+      showEvent({
+        kind,
+        name: kind === "raid" ? "PixelParty" : "Mika",
+        amount: kind === "cheer" ? 250 : kind === "raid" ? 24 : undefined,
+        at: Date.now(),
+      }),
+    onSpell: (spell, user) => spells.cast(spell, user),
+    onIntensity: (value) => {
+      state.sensitivity = value;
+      setDashboardText("intensity-value", `${value}%`);
+      updateClimate();
+    },
+    onThreshold: (value) => {
+      state.spellThresholdPercent = value;
+      localStorage.setItem("stormchat_spell_threshold", String(value));
+      setDashboardText("spell-threshold-value", `${value}%`);
+      spells.refresh();
+    },
+    onCalm: () => {
+      state.calm = !state.calm;
+      weatherCanvas.setCalm(state.calm);
+      return state.calm;
+    },
+    onLightning: () =>
+      showEvent({ kind: "lightning", name: "You", at: Date.now() }),
+    onClear: clearChat,
+    onCopyOverlay: copyOverlayUrl,
+    onConnect: startTwitchAuthorization,
+    onDisconnect: disconnectTwitch,
+  });
+  drawMetrics(state.climate);
+  drawChat(state.messages);
+  updateClimate();
+  window.setInterval(tick, 2_000);
+
+  if (accessToken) {
+    connectDashboardToken(accessToken).catch(() => {
+      sessionStorage.removeItem("stormchat_token");
+      accessToken = "";
+      showReconnectNote();
+    });
+  }
+}
+
+function updateConnectionStatus(status: string): void {
+  const element = document.querySelector("#connection-status");
+  if (!element) return;
+  element.textContent = status;
+  document
+    .querySelector("#status-dot")
+    ?.classList.toggle("connected", status.includes("Connected"));
+}
+
+function showReconnectNote(): void {
+  if (overlayMode) return;
+  document.querySelector("#reconnect-note")?.removeAttribute("hidden");
+  updateConnectionStatus("Reconnect needed");
+}
+
+function twitchClientId(): string {
+  return (
+    import.meta.env.VITE_TWITCH_CLIENT_ID ||
+    localStorage.getItem("stormchat_client_id") ||
+    ""
+  );
+}
+
+async function startTwitchAuthorization(): Promise<void> {
+  let clientId = twitchClientId();
+  if (!clientId) {
+    clientId =
+      prompt(
+        "Paste your Twitch Developer Client ID. You can save it in .env as VITE_TWITCH_CLIENT_ID.",
+        "",
+      ) || "";
+    if (!clientId) return;
+    localStorage.setItem("stormchat_client_id", clientId);
+  }
+
+  deviceAbort = new AbortController();
+  const button = document.querySelector<HTMLButtonElement>("#connect-twitch")!;
+  button.disabled = true;
+  button.textContent = "Waiting for Twitch…";
+  try {
+    await startDeviceFlow(
+      clientId,
+      (code, url) => {
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        document.querySelector("#connect-note")!.innerHTML =
+          `Enter this code on Twitch: <strong class="auth-code">${code}</strong> · <a target="_blank" rel="noreferrer" href="${url}">Open activation page</a>${opened ? "" : " (allow pop-ups to open Twitch)"}`;
+        updateConnectionStatus("Waiting for Twitch authorization…");
+      },
+      (token) => {
+        accessToken = token;
+        sessionStorage.setItem("stormchat_token", token);
+      },
+      deviceAbort.signal,
+    );
+    if (accessToken) await connectDashboardToken(accessToken);
+  } catch (error) {
+    alert(error instanceof Error ? error.message : String(error));
+    updateConnectionStatus("Simulator ready");
+  } finally {
+    button.disabled = false;
+    button.innerHTML = "<span>◉</span> Connect with Twitch";
+  }
+}
+
+async function connectDashboardToken(token: string): Promise<void> {
+  const clientId = twitchClientId();
+  if (!clientId) throw new Error("Add a Twitch client ID to connect.");
+  await twitch.connect(clientId, token);
+  state.simulator = false;
+  setDashboardText("channel-name", "Twitch channel");
+  setDashboardText(
+    "connect-note",
+    "Listening to live chat through Twitch EventSub.",
+  );
+  document.querySelector("#reconnect-note")?.setAttribute("hidden", "");
+  document.querySelector<HTMLButtonElement>("#connect-twitch")!.hidden = true;
+  document.querySelector<HTMLButtonElement>("#disconnect")!.hidden = false;
+}
+
+function disconnectTwitch(): void {
+  deviceAbort?.abort();
+  twitch.disconnect();
+  sessionStorage.removeItem("stormchat_token");
+  accessToken = "";
+  state.simulator = true;
+  updateConnectionStatus("Disconnected");
+  setDashboardText("channel-name", "Simulator stream");
+  setDashboardText(
+    "connect-note",
+    "Simulator is active. Connect Twitch to read your live chat, or run a demo below.",
+  );
+  document.querySelector<HTMLButtonElement>("#connect-twitch")!.hidden = false;
+  document.querySelector<HTMLButtonElement>("#disconnect")!.hidden = true;
+}
+
+function copyOverlayUrl(): void {
+  const url = makeOverlayUrl(
+    location.origin,
+    accessToken,
+    twitchClientId(),
+    state,
+  );
+  void navigator.clipboard?.writeText(url);
+  document
+    .querySelectorAll<HTMLButtonElement>("#copy-obs-url, #copy-obs-url-top")
+    .forEach((button) => {
+      const original = button.textContent || "";
+      button.textContent = "Copied";
+      window.setTimeout(() => (button.textContent = original), 1_400);
+    });
+}
+
+function runScenario(scene: string): void {
+  state.simulator = true;
+  state.messages.splice(0, state.messages.length, ...createScenario(scene));
+  tick();
+}
+
+function clearChat(): void {
+  state.messages.length = 0;
+  state.events.length = 0;
+  spells.clear();
+  tick();
+}
+
+function handleTwitch(kind: string, data: any): void {
+  if (kind === "chat") {
+    const message: ChatMessage = {
+      user: data.user,
+      text: data.text,
+      at: Date.now(),
+      emotes: [],
+    };
+    state.messages.push(message);
+    if (data.text.startsWith("!"))
+      spells.cast(data.text.split(/\s/)[0].toLowerCase(), data.user);
+    drawChat(state.messages);
+    return;
+  }
+
+  const kindByEvent: Record<string, WeatherEvent["kind"]> = {
+    follow: "follow",
+    sub: "sub",
+    cheer: "cheer",
+    raid: "raid",
+    tornado: "tornado",
+  };
+  const eventKind = kindByEvent[kind];
+  if (!eventKind) return;
+  showEvent({
+    kind: eventKind,
+    name: data.user,
+    amount: data.amount,
+    at: Date.now(),
+  });
+  if (kind === "raid") {
+    for (let index = 0; index < Math.min(25, data.amount || 0); index += 1) {
+      state.messages.push({
+        user: data.user,
+        text: "POG!!!",
+        at: Date.now(),
+        emotes: ["POG"],
+      });
+    }
+  }
+}
+
+function showEvent(event: WeatherEvent): void {
+  state.events.push(event);
+  weatherCanvas.addEvent(event);
+  const toast = document.querySelector<HTMLElement>("#event-toast");
+  if (toast) {
+    toast.textContent = eventLabel(event);
+    toast.classList.add("visible");
+    window.setTimeout(() => toast.classList.remove("visible"), 3_800);
+  }
+  const chatText: Partial<Record<WeatherEvent["kind"], string>> = {
+    follow: "💧 plip!",
+    sub: "🌈 subbed!",
+    cheer: `✦ ${event.amount} bits!`,
+    raid: `⚠ ${event.amount || "A"} raiders incoming!`,
+  };
+  if (chatText[event.kind]) addMessage(event.name, chatText[event.kind]!);
+}
+
+function eventLabel(event: WeatherEvent): string {
+  const labels: Record<WeatherEvent["kind"], string> = {
+    raid: `⚠ STORM FRONT INCOMING · ${event.name}`,
+    sub: `🌈 ${event.name} subscribed`,
+    follow: `💧 plip · ${event.name} followed`,
+    cheer: `✦ ${event.name} cheered ${event.amount || 0} bits`,
+    tornado: `🌪 ${event.name} summoned a tornado`,
+    lightning: `⚡ ${event.name} called lightning`,
+  };
+  return labels[event.kind];
+}
+
+function addMessage(user: string, text: string): void {
+  state.messages.push({ user, text, at: Date.now(), emotes: [] });
+  drawChat(state.messages);
+}
+
+function castWeather(weather: Weather): void {
+  state.spellWeather = { weather, until: Date.now() + 20_000 };
+  updateClimate();
+}
+
+function updateSpellProgress(): void {
+  setDashboardText("vote-label", spellProgress.text || "No active spell vote");
+  setDashboardText("hud-vote-progress", spellProgress.text);
+  const fill = document.querySelector<HTMLElement>("#vote-fill");
+  if (fill) fill.style.width = `${spellProgress.fill}%`;
+  document
+    .querySelector("#hud-vote-progress")
+    ?.classList.toggle("visible", Boolean(spellProgress.text));
+}
+
+function tick(): void {
+  state.climate = analyze(state.messages);
+  if (state.spellWeather && state.spellWeather.until > Date.now()) {
+    state.climate = {
+      ...state.climate,
+      weather: state.spellWeather.weather,
+      label: weatherLabel(state.spellWeather.weather),
+    };
+  } else {
+    state.spellWeather = undefined;
+  }
+  spells.refresh();
+
+  if (state.climate.weather !== state.lastRecordedWeather) {
+    if (state.climate.weather in state.weatherCounts) {
+      state.weatherCounts[state.climate.weather] += 1;
+    }
+    state.lastRecordedWeather = state.climate.weather;
+    for (const [weather, count] of Object.entries(state.weatherCounts)) {
+      setDashboardText(`${weather}-count`, String(count));
+    }
+  }
+  updateClimate();
+  drawMetrics(state.climate);
+  drawChat(state.messages);
+}
+
+function updateClimate(): void {
+  if (!weatherCanvas) return;
+  weatherCanvas.setWeather(state.climate.weather, state.sensitivity);
+  weatherCanvas.setCalm(state.calm);
+  setDashboardText("main-icon", icons[state.climate.weather]);
+  setDashboardText("main-label", state.climate.label);
+  setDashboardText("forecast", state.climate.forecast);
+  setDashboardText("top-emote", state.climate.topEmote);
+  setDashboardText("top-emote-copy", state.climate.topEmote);
+  updateOverlay(state.climate, spellProgress.text);
+  document.body.dataset.weather = state.climate.weather;
+}
+
+function weatherLabel(weather: Weather): string {
+  const labels: Record<Weather, string> = {
+    sun: "Sunshine",
+    storm: "Thunderstorm",
+    breeze: "Calm breeze",
+    rain: "Drizzle",
+    fog: "Quiet skies",
+    snow: "Emote flurry",
+  };
+  return labels[weather];
+}
