@@ -922,7 +922,7 @@ a {
 .event-toast {
   position: absolute;
   z-index: 3;
-  top: 6%;
+  top: var(--event-toast-top, 6%);
   left: 50%;
   transform: translate(-50%, -10px);
   opacity: 0;

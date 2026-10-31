@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "format": "prettier --write .",
     "test:scenarios": "tsx scripts/test-scenarios.ts",
+    "test:layout": "tsx scripts/test-event-layout.ts",
     "preview": "vite preview --host 0.0.0.0"
   },
   "devDependencies": {

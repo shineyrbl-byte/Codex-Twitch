@@ -10,12 +10,17 @@ import {
   setDashboardText,
 } from "./dashboard";
 import { renderOverlay, updateOverlay } from "./overlay";
+import { EVENT_LAYOUT } from "./event-layout";
 import { SpellController, type SpellProgress } from "./spells";
 import { startOverlaySimulator, startScenario } from "./simulator";
 import { createState, makeOverlayUrl, readOverlayOptions } from "./state";
 import type { ChatMessage, Weather, WeatherEvent } from "./types";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
+document.documentElement.style.setProperty(
+  "--event-toast-top",
+  `${EVENT_LAYOUT.alertTopPercent}%`,
+);
 const overlayMode = location.pathname === "/overlay";
 if (overlayMode) {
   document.documentElement.classList.add("overlay-route");
@@ -320,7 +325,10 @@ function showEvent(event: WeatherEvent): void {
   if (toast) {
     toast.textContent = eventLabel(event);
     toast.classList.add("visible");
-    window.setTimeout(() => toast.classList.remove("visible"), 3_800);
+    window.setTimeout(
+      () => toast.classList.remove("visible"),
+      EVENT_LAYOUT.toastHideMs,
+    );
   }
   const chatText: Partial<Record<WeatherEvent["kind"], string>> = {
     follow: "💧 plip!",

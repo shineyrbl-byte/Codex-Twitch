@@ -1,4 +1,5 @@
 import type { Weather, WeatherEvent } from "./types";
+import { EVENT_LAYOUT } from "./event-layout";
 
 type Particle = {
   x: number;
@@ -434,17 +435,20 @@ export class WeatherCanvas {
     const context = this.ctx;
     const width = this.width;
     const height = this.height;
-    this.events = this.events.filter((event) => Date.now() - event.at < 4_200);
+    this.events = this.events.filter(
+      (event) => Date.now() - event.at < EVENT_LAYOUT.effectDurationMs,
+    );
     for (const event of this.events) {
       const age = (Date.now() - event.at) / 1000;
-      const progress = age / 4.2;
+      const progress = age / (EVENT_LAYOUT.effectDurationMs / 1000);
       context.globalAlpha = Math.max(0, 1 - progress);
       if (event.kind === "sub") {
         // The arch stays in the top third, clear of faces and gameplay.
         const x = width * 0.5;
-        const y = height * 0.31;
+        const y = height * EVENT_LAYOUT.subRainbowCenterY;
         const rx = width * 0.42 * (0.85 + progress * 0.15);
-        const ry = height * 0.27 * (0.85 + progress * 0.15);
+        const ry =
+          height * EVENT_LAYOUT.subRainbowRadiusY * (0.85 + progress * 0.15);
         const rainbow = [
           "#fa7774",
           "#ffc66c",
