@@ -71,3 +71,17 @@ Codex worked through the build brief in milestones:
 ## Scope notes
 
 StormChat is a browser-only demo. OAuth tokens are kept in session storage, but a browser-only app cannot protect secrets from browser extensions or other scripts running on the same origin. Do not add a client secret to this project. Chat responses for `!forecast`, persistent climate history, and season palettes are not part of the current MVP.
+
+## Deploy on Vercel
+
+StormChat is a Vite single-page app. The included `vercel.json` rewrites `/overlay` and `/dashboard` to `index.html` while preserving each URL, so OBS can load the standalone overlay route directly.
+
+1. Push the repository to GitHub. In [Vercel](https://vercel.com), choose **Add New… → Project**.
+2. Under **Import Git Repository**, find `Codex-Twitch` and click **Import**. If it is not listed, click **Adjust GitHub App Permissions** and grant Vercel access to this repository, then return and import it.
+3. In project configuration, confirm **Framework Preset: Vite**, **Build Command: `npm run build`**, and **Output Directory: `dist`**. Leave the install command as `npm install`.
+4. Expand **Environment Variables** and add `VITE_TWITCH_CLIENT_ID` with the Client ID from your Twitch app. Apply it to Production (and Preview if desired). Do not add a Twitch client secret.
+5. Click **Deploy**. When it finishes, open the assigned `https://<project>.vercel.app` domain and verify `/dashboard` and `/overlay#sim=1` load.
+6. In the Twitch Developer Console, open **Applications → Manage** for the same app. Add the deployed origin, such as `https://<project>.vercel.app`, under **OAuth Redirect URLs**, click **Add**, then **Save**. Keep `http://localhost:5173` registered too if you use the local development server. StormChat's device-code flow does not redirect back to this URL, but Twitch requires registered redirect URL configuration for an application.
+7. In the deployed dashboard, connect Twitch and choose **Copy OBS overlay URL**. Paste that URL into the OBS Browser Source. For demos, use `https://<project>.vercel.app/overlay#sim=1`.
+
+Vercel creates future deployments from GitHub pushes. See Vercel's [Vite deployment guide](https://vercel.com/docs/frameworks/frontend/vite) and [rewrite configuration](https://vercel.com/docs/routing/rewrites), plus Twitch's [app registration steps](https://dev.twitch.tv/docs/authentication/register-app/).
