@@ -30,6 +30,12 @@ body {
     ),
     var(--bg);
 }
+html.overlay-route,
+body.overlay-route {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
 button,
 a {
   font: inherit;
@@ -218,14 +224,35 @@ a {
   margin: 0 12px;
   border: 1px solid #ffffff0a;
   border-radius: 7px;
-  background:
-    radial-gradient(ellipse at 9% 5%, #afa77623, transparent 39%),
-    linear-gradient(120deg, #252b2c, #202933 55%, #242737);
+  background-color: #202933;
+  background-image:
+    linear-gradient(45deg, #303a44 25%, transparent 25%),
+    linear-gradient(-45deg, #303a44 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #303a44 75%),
+    linear-gradient(-45deg, transparent 75%, #303a44 75%);
+  background-size: 28px 28px;
+  background-position:
+    0 0,
+    0 14px,
+    14px -14px,
+    -14px 0;
   position: relative;
   display: flex;
   align-items: center;
   padding: 22px;
   overflow: hidden;
+}
+.weather-hero::before {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  right: 10px;
+  color: #e4e9edaa;
+  content: "TRANSPARENCY PREVIEW";
+  font:
+    8px "DM Mono",
+    monospace;
+  letter-spacing: 0.7px;
 }
 .preview-canvas {
   position: absolute;

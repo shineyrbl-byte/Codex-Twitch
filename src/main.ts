@@ -17,6 +17,10 @@ import type { ChatMessage, Weather, WeatherEvent } from "./types";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const overlayMode = location.pathname === "/overlay";
+if (overlayMode) {
+  document.documentElement.classList.add("overlay-route");
+  document.body.classList.add("overlay-route");
+}
 const state = createState(
   overlayMode
     ? 30
