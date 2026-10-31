@@ -146,6 +146,8 @@ function updateConnectionStatus(status: string): void {
 function showReconnectNote(): void {
   if (overlayMode) return;
   document.querySelector("#reconnect-note")?.removeAttribute("hidden");
+  document.querySelector<HTMLButtonElement>("#connect-twitch")!.hidden = false;
+  document.querySelector<HTMLButtonElement>("#disconnect")!.hidden = false;
   updateConnectionStatus("Reconnect needed");
 }
 
