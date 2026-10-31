@@ -105,7 +105,7 @@ export class SpellController {
       storm: "⛈️",
       breeze: "🌤️",
       rain: "🌧️",
-      fog: "🌫️",
+      fog: "☁️",
       snow: "❄️",
     }[weather];
   }

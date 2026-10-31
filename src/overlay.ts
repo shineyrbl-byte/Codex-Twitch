@@ -5,7 +5,7 @@ const icons: Record<Weather, string> = {
   storm: "⛈️",
   breeze: "🌤️",
   rain: "🌧️",
-  fog: "🌫️",
+  fog: "☁️",
   snow: "❄️",
 };
 

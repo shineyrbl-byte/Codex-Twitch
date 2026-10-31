@@ -55,7 +55,7 @@ export function analyze(messages: ChatMessage[], now = Date.now()): Climate {
       quiet: 100,
       weather: "fog",
       label: "Quiet skies",
-      forecast: "🌫️ Chat is quiet. Fog is rolling in.",
+      forecast: "☁️ Chat is quiet. Fog is rolling in.",
       topEmote: "—",
     };
   const text = recent.map((m) => m.text.toLowerCase());
@@ -167,7 +167,7 @@ export function analyze(messages: ChatMessage[], now = Date.now()): Climate {
     quiet,
     weather,
     label,
-    forecast: `${weather === "storm" ? "⛈️" : weather === "sun" ? "☀️" : weather === "rain" ? "🌧️" : weather === "fog" ? "🌫️" : weather === "snow" ? "❄️" : "🌤️"} ${phrase}. ${Math.round(pct)}% chance of ${weather === "storm" ? "chaos" : weather === "sun" ? "hype" : weather === "fog" ? "fog" : weather}.`,
+    forecast: `${weather === "storm" ? "⛈️" : weather === "sun" ? "☀️" : weather === "rain" ? "🌧️" : weather === "fog" ? "☁️" : weather === "snow" ? "❄️" : "🌤️"} ${phrase}. ${Math.round(pct)}% chance of ${weather === "storm" ? "chaos" : weather === "sun" ? "hype" : weather === "fog" ? "fog" : weather}.`,
     topEmote,
   };
 }
