@@ -77,7 +77,9 @@ function mountOverlay(): void {
   updateClimate();
   window.setInterval(tick, 2_000);
 
-  if (options.simulator) {
+  if (options.simulator && options.demo) {
+    startOverlayDemo(options.demo);
+  } else if (options.simulator) {
     startOverlaySimulator((messages) => {
       if (!messages.length) state.messages.length = 0;
       else state.messages.push(...messages);
@@ -88,6 +90,41 @@ function mountOverlay(): void {
       // Keep authentication details out of the stream overlay and its console.
     });
   }
+}
+
+function startOverlayDemo(demo: string): void {
+  const demoScenes: Record<string, { scene: string; weather: Weather }> = {
+    sun: { scene: "hype", weather: "sun" },
+    storm: { scene: "chaos", weather: "storm" },
+    rain: { scene: "negative", weather: "rain" },
+    fog: { scene: "quiet", weather: "fog" },
+    snow: { scene: "quiet", weather: "snow" },
+  };
+  const selected = demoScenes[demo.toLowerCase()];
+  if (selected) {
+    state.demoWeather = selected.weather;
+    runScenario(selected.scene);
+    return;
+  }
+  if (demo.toLowerCase() === "sub" || demo.toLowerCase() === "raid") {
+    state.messages.length = 0;
+    state.demoWeather = "sun";
+    const kind: WeatherEvent["kind"] =
+      demo.toLowerCase() === "sub" ? "sub" : "raid";
+    showEvent({
+      kind,
+      name: demo.toLowerCase() === "sub" ? "Mika" : "PixelParty",
+      amount: demo.toLowerCase() === "raid" ? 24 : undefined,
+      at: Date.now(),
+    });
+    tick();
+    return;
+  }
+  startOverlaySimulator((messages) => {
+    if (!messages.length) state.messages.length = 0;
+    else state.messages.push(...messages);
+    tick();
+  }, showEvent);
 }
 
 function mountDashboard(): void {
@@ -373,7 +410,13 @@ function updateSpellProgress(): void {
 
 function tick(): void {
   state.climate = analyze(state.messages);
-  if (state.spellWeather && state.spellWeather.until > Date.now()) {
+  if (state.demoWeather) {
+    state.climate = {
+      ...state.climate,
+      weather: state.demoWeather,
+      label: weatherLabel(state.demoWeather),
+    };
+  } else if (state.spellWeather && state.spellWeather.until > Date.now()) {
     state.climate = {
       ...state.climate,
       weather: state.spellWeather.weather,

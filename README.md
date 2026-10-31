@@ -85,3 +85,7 @@ StormChat is a Vite single-page app. The included `vercel.json` rewrites `/overl
 7. In the deployed dashboard, connect Twitch and choose **Copy OBS overlay URL**. Paste that URL into the OBS Browser Source. For demos, use `https://<project>.vercel.app/overlay#sim=1`.
 
 Vercel creates future deployments from GitHub pushes. See Vercel's [Vite deployment guide](https://vercel.com/docs/frameworks/frontend/vite) and [rewrite configuration](https://vercel.com/docs/routing/rewrites), plus Twitch's [app registration steps](https://dev.twitch.tv/docs/authentication/register-app/).
+
+### Cueable overlay demos
+
+Load the overlay with `#sim=1&demo=<cue>` to hold a specific look while recording. Supported cues are `sun`, `storm`, `rain`, `fog`, and `snow`; `sub` and `raid` trigger their matching event animation once. For example, `https://<project>.vercel.app/overlay#sim=1&demo=storm` starts a storm scene. Omit `demo` to use the rotating simulator scenes.

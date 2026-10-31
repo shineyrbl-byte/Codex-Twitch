@@ -7,6 +7,7 @@ export interface OverlayOptions {
   clientId: string;
   sensitivity: number;
   spellThresholdPercent: number;
+  demo: string;
 }
 
 export interface AppState {
@@ -18,6 +19,7 @@ export interface AppState {
   simulator: boolean;
   spellThresholdPercent: number;
   spellWeather?: { weather: Weather; until: number };
+  demoWeather?: Weather;
   lastRecordedWeather: Weather;
   weatherCounts: Record<string, number>;
 }
@@ -43,6 +45,7 @@ export function readOverlayOptions(hash: string): OverlayOptions {
 
   return {
     simulator: params.get("sim") === "1",
+    demo: params.get("demo") || "",
     token: params.get("token") || "",
     clientId: params.get("client_id") || "",
     sensitivity:
