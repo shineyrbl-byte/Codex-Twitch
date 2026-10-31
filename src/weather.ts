@@ -75,7 +75,7 @@ export class WeatherCanvas {
       h = this.height;
     c.clearRect(0, 0, w, h);
     if (this.calm) {
-      this.drawLabels(time);
+      this.drawEffects();
       return;
     }
     const count = Math.round(24 + this.intensity * 0.75);
@@ -178,9 +178,9 @@ export class WeatherCanvas {
       c.fillRect(0, 0, w, h);
       this.flashes = Math.max(0, this.flashes - dt * 2.4);
     }
-    this.drawLabels(time);
+    this.drawEffects();
   }
-  private drawLabels(time: number) {
+  private drawEffects() {
     const c = this.ctx,
       w = this.width,
       h = this.height;
@@ -276,31 +276,6 @@ export class WeatherCanvas {
         c.lineTo(x + 4, y + 13);
         c.fill();
       }
-      const x = w * 0.5 + Math.sin(age * 1.3) * w * 0.24,
-        y =
-          e.kind === "raid"
-            ? h * 0.08 - age * h * 0.01
-            : h * 0.32 - age * h * 0.035;
-      c.globalAlpha = Math.max(0, 1 - progress);
-      c.textAlign = "center";
-      c.font = `600 ${Math.max(17, w * 0.018)}px Inter,system-ui,sans-serif`;
-      c.fillStyle = "#fff";
-      c.shadowColor = "rgba(0,0,0,.8)";
-      c.shadowBlur = 12;
-      const label =
-        e.kind === "raid"
-          ? `⚠ STORM FRONT INCOMING · ${e.name}`
-          : e.kind === "follow"
-            ? `💧 plip · ${e.name} followed`
-            : e.kind === "sub"
-              ? `🌈 ${e.name} subscribed`
-              : e.kind === "cheer"
-                ? `✦ ${e.name} cheered ${e.amount || 0} bits`
-                : e.kind === "tornado"
-                  ? `🌪 ${e.name} summoned a tornado`
-                  : `⚡ ${e.name} called lightning`;
-      c.fillText(label, x, y);
-      c.shadowBlur = 0;
     }
     c.globalAlpha = 1;
     c.textAlign = "start";
