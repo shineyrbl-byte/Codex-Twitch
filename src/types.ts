@@ -14,6 +14,7 @@ export interface ChatMessage {
   text: string;
   at: number;
   emotes: string[];
+  simulated?: boolean;
 }
 export interface WeatherEvent {
   kind: "follow" | "sub" | "cheer" | "raid" | "tornado" | "lightning";

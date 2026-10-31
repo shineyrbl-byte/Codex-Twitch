@@ -19,6 +19,10 @@ export class TwitchConnection {
     private onEvent: TwitchEvent,
     private onStatus: (s: string) => void,
     private onExpired: () => void = () => {},
+    private onProfile: (profile: {
+      login: string;
+      avatar: string;
+    }) => void = () => {},
   ) {}
   async connect(clientId: string, token: string) {
     this.clientId = clientId;
@@ -51,6 +55,12 @@ export class TwitchConnection {
     if (!me.ok) throw new Error("Could not read Twitch profile.");
     const [user] = (await me.json()).data || [];
     this.broadcasterId = user?.id;
+    if (user?.login) {
+      this.onProfile({
+        login: user.login,
+        avatar: user.profile_image_url || "",
+      });
+    }
     if (!this.broadcasterId)
       throw new Error("Could not find broadcaster account.");
     this.open();

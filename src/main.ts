@@ -50,6 +50,7 @@ const twitch = new TwitchConnection(
   handleTwitch,
   updateConnectionStatus,
   showReconnectNote,
+  updateChannelIdentity,
 );
 const spells = new SpellController(
   () => state.messages,
@@ -170,6 +171,7 @@ function mountDashboard(): void {
   });
   drawMetrics(state.climate);
   drawChat(state.messages);
+  updateSourceStatus();
   updateClimate();
   window.setInterval(tick, 2_000);
 
@@ -179,6 +181,43 @@ function mountDashboard(): void {
       accessToken = "";
       showReconnectNote();
     });
+  }
+}
+
+function updateChannelIdentity(profile: {
+  login: string;
+  avatar: string;
+}): void {
+  setDashboardText("channel-name", profile.login);
+  setChannelAvatar(profile.avatar);
+}
+
+function setChannelAvatar(url: string): void {
+  const avatar = document.querySelector<HTMLElement>("#channel-avatar");
+  if (!avatar) return;
+  avatar.replaceChildren();
+  if (!url) {
+    avatar.textContent = "S";
+    return;
+  }
+  const image = document.createElement("img");
+  image.src = url;
+  image.alt = "";
+  avatar.append(image);
+}
+
+function updateSourceStatus(demoScene?: string): void {
+  const pill = document.querySelector<HTMLElement>("#simulator-status");
+  if (pill) pill.textContent = state.simulator ? "ON" : "OFF";
+  const note = document.querySelector<HTMLElement>("#source-note");
+  if (!note) return;
+  if (state.simulator) {
+    note.textContent = "Simulator mode is on. Demo messages are simulated.";
+  } else if (demoScene) {
+    note.textContent = `Live Twitch stays connected. “${demoScene}” adds messages marked DEMO.`;
+  } else {
+    note.textContent =
+      "Live Twitch messages are active. Demo samples are marked DEMO.";
   }
 }
 
@@ -253,11 +292,12 @@ async function connectDashboardToken(token: string): Promise<void> {
   if (!clientId) throw new Error("Add a Twitch client ID to connect.");
   await twitch.connect(clientId, token);
   state.simulator = false;
-  setDashboardText("channel-name", "Twitch channel");
+  updateSourceStatus();
   setDashboardText(
     "connect-note",
     "Listening to live chat through Twitch EventSub.",
   );
+  updateSourceStatus();
   document.querySelector("#reconnect-note")?.setAttribute("hidden", "");
   document.querySelector<HTMLButtonElement>("#connect-twitch")!.hidden = true;
   document.querySelector<HTMLButtonElement>("#disconnect")!.hidden = false;
@@ -269,8 +309,10 @@ function disconnectTwitch(): void {
   sessionStorage.removeItem("stormchat_token");
   accessToken = "";
   state.simulator = true;
+  updateSourceStatus();
   updateConnectionStatus("Disconnected");
   setDashboardText("channel-name", "Simulator stream");
+  setChannelAvatar("");
   setDashboardText(
     "connect-note",
     "Simulator is active. Connect Twitch to read your live chat, or run a demo below.",
@@ -298,7 +340,7 @@ function copyOverlayUrl(): void {
 
 function runScenario(scene: string): void {
   stopScenario();
-  state.simulator = true;
+  updateSourceStatus(scene);
   state.messages.length = 0;
   stopScenario = startScenario(scene, (messages) => {
     state.messages.push(...messages);
@@ -320,6 +362,7 @@ function handleTwitch(kind: string, data: any): void {
       text: data.text,
       at: Date.now(),
       emotes: [],
+      simulated: false,
     };
     state.messages.push(message);
     if (data.text.startsWith("!"))

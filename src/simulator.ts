@@ -67,6 +67,7 @@ export function createScenario(scene: string, now = Date.now()): ChatMessage[] {
       text: `${text}${uniqueSuffix}`,
       at: now - age,
       emotes: [],
+      simulated: true,
     };
   });
 }
