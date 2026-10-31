@@ -1,0 +1,31 @@
+type TwitchEvent=(kind:'chat'|'follow'|'sub'|'cheer'|'raid'|'tornado',data:any)=>void;
+const API='https://api.twitch.tv/helix'; const WS='wss://eventsub.wss.twitch.tv/ws';
+export class TwitchConnection {
+  private socket?:WebSocket; private token=''; private clientId=''; private broadcasterId=''; private userId=''; private stopped=false; private reconnectTimer=0; private retry=0; private connecting=false;
+  constructor(private onEvent:TwitchEvent,private onStatus:(s:string)=>void){}
+  async connect(clientId:string,token:string){this.clientId=clientId;this.token=token;this.stopped=false;this.onStatus('Validating token…');const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:`OAuth ${token}`}});if(!r.ok)throw new Error('Twitch token is invalid or expired. Disconnect and connect again.');const auth=await r.json();if(auth.client_id!==clientId)throw new Error('This access token belongs to a different Twitch client ID.');this.userId=auth.user_id;const me=await fetch(`${API}/users?id=${auth.user_id}`,{headers:this.headers()});if(!me.ok)throw new Error('Could not read Twitch profile.');const [user]=((await me.json()).data||[]);this.broadcasterId=user?.id;if(!this.broadcasterId)throw new Error('Could not find broadcaster account.');this.open();}
+  disconnect(){this.stopped=true;window.clearTimeout(this.reconnectTimer);this.socket?.close();this.socket=undefined;this.onStatus('Disconnected');}
+  private headers(){return {'Client-Id':this.clientId,Authorization:`Bearer ${this.token}`,'Content-Type':'application/json'};}
+  private open(url=WS){if(this.stopped||this.connecting)return;this.connecting=true;this.onStatus('Connecting to EventSub…');const ws=new WebSocket(url);this.socket=ws;ws.onopen=()=>{this.connecting=false;this.retry=0;};ws.onerror=()=>{};ws.onclose=()=>{this.connecting=false;if(!this.stopped){this.onStatus('Reconnecting…');this.reconnectTimer=window.setTimeout(()=>this.open(),Math.min(30_000,1000*2**this.retry++));}};ws.onmessage=(event)=>{try{this.handle(JSON.parse(event.data));}catch(e){console.warn('Unable to handle Twitch event',e);}};}
+  private async handle(msg:any){const type=msg.metadata?.message_type;const payload=msg.payload;if(type==='session_welcome'){this.onStatus('Subscribing to channel…');await this.subscribe(payload.session.id);this.onStatus('Connected · Twitch EventSub');}else if(type==='session_reconnect'){const next=payload.session.reconnect_url;this.socket?.close();this.socket=undefined;this.open(next);}else if(type==='notification'){this.event(payload.subscription.type,payload.event);}}
+  private async subscribe(sessionId:string){const entries=[
+    ['channel.chat.message','1',{broadcaster_user_id:this.broadcasterId,user_id:this.userId}],
+    ['channel.follow','2',{broadcaster_user_id:this.broadcasterId,moderator_user_id:this.userId}],
+    ['channel.subscribe','1',{broadcaster_user_id:this.broadcasterId}],
+    ['channel.subscription.gift','1',{broadcaster_user_id:this.broadcasterId}],
+    ['channel.cheer','1',{broadcaster_user_id:this.broadcasterId}],
+    ['channel.raid','1',{to_broadcaster_user_id:this.broadcasterId}],
+    ['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:this.broadcasterId}]
+  ];
+    const failures:string[]=[];for(const [type,version,condition] of entries){try{const r=await fetch(`${API}/eventsub/subscriptions`,{method:'POST',headers:this.headers(),body:JSON.stringify({type,version,condition,transport:{method:'websocket',session_id:sessionId}})});if(!r.ok){const body=await r.json().catch(()=>({}));failures.push(`${type}: ${body.message||r.status}`);}}catch(e){failures.push(`${type}: network error`);}}
+    if(failures.length){console.warn('Some StormChat EventSub subscriptions could not be created:',failures);this.onStatus(`Connected · ${entries.length-failures.length}/${entries.length} subscriptions. Check required Twitch scopes.`);}
+  }
+  private event(type:string,e:any){switch(type){case'channel.chat.message':this.onEvent('chat',{user:e.chatter_user_name,text:(e.message?.text||'').toString()});break;case'channel.follow':this.onEvent('follow',{user:e.user_name});break;case'channel.subscribe':this.onEvent('sub',{user:e.user_name});break;case'channel.subscription.gift':this.onEvent('sub',{user:e.gifter_user_name||'A kind chatter'});break;case'channel.cheer':this.onEvent('cheer',{user:e.user_name||'Anonymous',amount:e.bits});break;case'channel.raid':this.onEvent('raid',{user:e.from_broadcaster_user_name,amount:e.viewers});break;case'channel.channel_points_custom_reward_redemption.add':if((e.reward?.title||'').toLowerCase().includes('tornado'))this.onEvent('tornado',{user:e.user_name});break;}}
+}
+
+export async function startDeviceFlow(clientId:string,onCode:(code:string,url:string)=>void,onStatus:(status:string)=>void,signal:AbortSignal){
+  const scopes=['user:read:chat','moderator:read:followers','channel:read:subscriptions','bits:read','channel:read:redemptions'];
+  const body=new URLSearchParams({client_id:clientId,scopes:scopes.join(' ')});
+  const r=await fetch('https://id.twitch.tv/oauth2/device',{method:'POST',body});if(!r.ok)throw new Error('Device authorization failed. Confirm your Twitch Client ID and retry.');const d=await r.json();onCode(d.user_code,d.verification_uri);
+  const started=Date.now();while(Date.now()-started<d.expires_in*1000&&!signal.aborted){await new Promise(resolve=>setTimeout(resolve,d.interval*1000));if(signal.aborted)return;const token=await fetch('https://id.twitch.tv/oauth2/token',{method:'POST',body:new URLSearchParams({client_id:clientId,scopes:scopes.join(' '),device_code:d.device_code,grant_type:'urn:ietf:params:oauth:grant-type:device_code'})});const value=await token.json();if(token.ok){onStatus(value.access_token);return;}if(value.message==='authorization_pending')continue;if(value.message==='slow_down'){await new Promise(resolve=>setTimeout(resolve,5000));continue;}throw new Error(value.message||'Twitch authorization failed.');}throw new Error('Twitch device code expired. Start again.');
+}
