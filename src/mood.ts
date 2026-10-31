@@ -1,8 +1,8 @@
 import type { ChatMessage, Climate, Weather } from './types';
 
-const hype = ['pog','pogchamp','poggers','kekw','lul','lets go','hype','w','insane','🔥','💀','😂'];
+const hype = ['pog','pogchamp','poggers','kekw','lul','lets go','hype','insane','🔥','💀','😂'];
 const positive = ['love','great','good','amazing','nice','beautiful','awesome','win','❤️','💖','💯','👏','😊'];
-const negative = ['hate','bad','boring','awful','terrible','sad','worst','L','😡','👎','🤮'];
+const negative = ['hate','bad','boring','awful','terrible','sad','worst','😡','👎','🤮'];
 const emotePattern = /\b(PogChamp|POG|Pog|KEKW|LUL|Kappa|OMEGALUL|Pepega|FeelsGoodMan|FeelsBadMan)\b|[\p{Extended_Pictographic}]/gu;
 const clamp=(n:number)=>Math.max(0,Math.min(100,Math.round(n)));
 
@@ -11,11 +11,11 @@ export function analyze(messages:ChatMessage[], now=Date.now()):Climate {
   if(!n) return {energy:0,positivity:50,chaos:0,quiet:100,weather:'fog',label:'Quiet skies',forecast:'🌫️ Chat is quiet. Fog is rolling in.',topEmote:'—'};
   const text=recent.map(m=>m.text.toLowerCase());
   const rate=Math.min(1,n/90);
-  const hypeHits=text.reduce((a,t)=>a+hype.filter(k=>t.includes(k.toLowerCase())).length,0);
+  const hypeHits=recent.reduce((a,m)=>{const t=m.text.toLowerCase();return a+hype.filter(k=>t.includes(k)).length+Number(/\bw\b/i.test(m.text));},0);
   const caps=recent.filter(m=>{const letters=m.text.replace(/[^a-z]/gi,'');return letters.length>4&&letters===letters.toUpperCase()}).length;
   const exclaims=recent.filter(m=>/!!!+/.test(m.text)).length;
   const energy=clamp(rate*65+Math.min(25,hypeHits*4)+Math.min(10,caps*2+exclaims*2));
-  let p=0; for(const t of text){p+=positive.filter(k=>t.includes(k.toLowerCase())).length-negative.filter(k=>t.includes(k.toLowerCase())).length;}
+  let p=0; for(const m of recent){const t=m.text.toLowerCase();p+=positive.filter(k=>t.includes(k)).length-negative.filter(k=>t.includes(k)).length-Number(/\bl\b/i.test(m.text));}
   const positivity=clamp(50+p*12);
   const counts=new Map<string,number>(); for(const t of text)counts.set(t,(counts.get(t)||0)+1);
   const duplicate=[...counts.values()].reduce((a,c)=>a+Math.max(0,c-1),0);
