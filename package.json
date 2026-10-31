@@ -7,10 +7,12 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "format": "prettier --write .",
+    "test:scenarios": "tsx scripts/test-scenarios.ts",
     "preview": "vite preview --host 0.0.0.0"
   },
   "devDependencies": {
     "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
   }

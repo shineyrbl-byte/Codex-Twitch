@@ -11,7 +11,7 @@ import {
 } from "./dashboard";
 import { renderOverlay, updateOverlay } from "./overlay";
 import { SpellController, type SpellProgress } from "./spells";
-import { createScenario, startOverlaySimulator } from "./simulator";
+import { startOverlaySimulator, startScenario } from "./simulator";
 import { createState, makeOverlayUrl, readOverlayOptions } from "./state";
 import type { ChatMessage, Weather, WeatherEvent } from "./types";
 
@@ -39,6 +39,7 @@ let accessToken = sessionStorage.getItem("stormchat_token") || "";
 let weatherCanvas: WeatherCanvas;
 let deviceAbort: AbortController | undefined;
 let spellProgress: SpellProgress = { count: 0, required: 2, text: "", fill: 0 };
+let stopScenario = () => {};
 
 const twitch = new TwitchConnection(
   handleTwitch,
@@ -73,7 +74,8 @@ function mountOverlay(): void {
 
   if (options.simulator) {
     startOverlaySimulator((messages) => {
-      state.messages.splice(0, state.messages.length, ...messages);
+      if (!messages.length) state.messages.length = 0;
+      else state.messages.push(...messages);
       tick();
     }, showEvent);
   } else if (options.token && options.clientId) {
@@ -253,9 +255,13 @@ function copyOverlayUrl(): void {
 }
 
 function runScenario(scene: string): void {
+  stopScenario();
   state.simulator = true;
-  state.messages.splice(0, state.messages.length, ...createScenario(scene));
-  tick();
+  state.messages.length = 0;
+  stopScenario = startScenario(scene, (messages) => {
+    state.messages.push(...messages);
+    tick();
+  });
 }
 
 function clearChat(): void {
