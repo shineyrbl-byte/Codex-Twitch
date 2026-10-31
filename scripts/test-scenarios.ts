@@ -31,5 +31,11 @@ for (const scenario of scenarios) {
     scenario.label,
     `${scenario.name} should reach its named weather`,
   );
+  if (scenario.name === "chaos") {
+    assert.ok(
+      result.quiet <= 10,
+      "a busy emote burst must not retain a high quiet score",
+    );
+  }
   console.log(`✓ ${scenario.name} → ${result.weather}`);
 }

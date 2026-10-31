@@ -110,7 +110,8 @@ export function analyze(messages: ChatMessage[], now = Date.now()): Climate {
       Math.min(35, (unique / Math.max(1, n)) * 35) +
       (n > 25 ? 10 : 0),
   );
-  const quiet = clamp(100 - rate * 100);
+  // Thirty messages in this rolling window means chat is active, not quiet.
+  const quiet = clamp(100 - (n / 30) * 100);
   let weather: Weather = "breeze",
     label = "Calm breeze";
   if (n < 3 || quiet > 92) {
