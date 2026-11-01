@@ -2,6 +2,8 @@
 
 **Chat is the weather.** StormChat turns the mood of Twitch chat into a transparent OBS overlay: hype brings sunshine, chaos brings storms, and a quiet room rolls in fog.
 
+[Watch the StormChat demo](https://youtu.be/qQOWbeYOGes)
+
 ## Run it locally
 
 ```sh
